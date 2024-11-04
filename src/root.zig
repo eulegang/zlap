@@ -52,10 +52,10 @@ fn CreateFlags(T: type, opts: Options(T)) type {
 
         fn set(_: Self, args: *T, field: std.builtin.Type.StructField, arg: []const u8) !void {
             switch (@typeInfo(field.type)) {
-                .Void, .Null => {},
                 .Int => {
                     @field(args, field.name) = try std.fmt.parseInt(field.type, arg, 10);
                 },
+
                 .Float => {
                     @field(args, field.name) = try std.fmt.parseFloat(field.type, arg);
                 },
