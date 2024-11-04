@@ -42,13 +42,32 @@ fn CreateFlags(T: type, opts: Options(T)) type {
             return FlagError.NoExistingFlag;
         }
 
-        fn setup(self: Self, args: *T, arg: []const u8) void {
+        fn setup(self: Self, args: *T, arg: []const u8) !void {
             inline for (s.fields, 0..) |field, i| {
                 if (i == self.back) {
-                    const name = field.name;
-
-                    @field(args, name) = arg;
+                    try self.set(args, field, arg);
                 }
+            }
+        }
+
+        fn set(_: Self, args: *T, field: std.builtin.Type.StructField, arg: []const u8) !void {
+            switch (@typeInfo(field.type)) {
+                .Void, .Null => {},
+                .Int => {
+                    @field(args, field.name) = try std.fmt.parseInt(field.type, arg, 10);
+                },
+
+                .Pointer => |ptr| {
+                    if (ptr.size == .Slice and ptr.child == u8) { // string!
+                        @field(args, field.name) = arg;
+                    } else {
+                        @compileLog("Parsing zlap does not support arguements with type", @typeInfo(field.type));
+                    }
+                },
+
+                else => {
+                    @compileLog("Parsing zlap does not support arguements with type", @typeInfo(field.type));
+                },
             }
         }
     };
@@ -119,7 +138,7 @@ pub fn Builder(T: type, opts: Options(T)) type {
 
                 if (skip_processing) {} else {
                     if (current_flag) |flag| {
-                        flag.setup(&args, arg);
+                        try flag.setup(&args, arg);
                         current_flag = null;
                     } else {
                         current_flag = try Flag.from(arg);
@@ -223,4 +242,24 @@ test "env option in builder" {
 
         try std.testing.expectEqualStrings(args.user, "mel");
     }
+}
+
+test "int option parsed" {
+    const Args = struct {
+        level: u32,
+    };
+
+    const B = Builder(Args, .{
+        .level = .{
+            .short = 'l',
+            .long = "level",
+        },
+    });
+
+    var builder = try B.static(std.testing.allocator, &.{ "-l", "42" });
+    defer builder.deinit();
+
+    const args = try builder.try_parse();
+
+    try std.testing.expectEqual(args.level, 42);
 }
