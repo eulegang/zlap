@@ -137,7 +137,7 @@ pub fn Builder(T: type, opts: Options(T)) type {
                     continue;
                 }
 
-                if (skip_processing) {} else {
+                if (!skip_processing) {
                     if (current_flag) |flag| {
                         try flag.setup(&args, arg);
                         current_flag = null;
