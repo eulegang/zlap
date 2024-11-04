@@ -56,13 +56,14 @@ fn CreateFlags(T: type, opts: Options(T)) type {
                 .Int => {
                     @field(args, field.name) = try std.fmt.parseInt(field.type, arg, 10);
                 },
+                .Float => {
+                    @field(args, field.name) = try std.fmt.parseFloat(field.type, arg);
+                },
 
                 .Pointer => |ptr| {
                     if (ptr.size == .Slice and ptr.child == u8) { // string!
                         @field(args, field.name) = arg;
-                    } else {
-                        @compileLog("Parsing zlap does not support arguements with type", @typeInfo(field.type));
-                    }
+                    } else {}
                 },
 
                 else => {
@@ -262,4 +263,24 @@ test "int option parsed" {
     const args = try builder.try_parse();
 
     try std.testing.expectEqual(args.level, 42);
+}
+
+test "float option parsed" {
+    const Args = struct {
+        level: f32,
+    };
+
+    const B = Builder(Args, .{
+        .level = .{
+            .short = 'l',
+            .long = "level",
+        },
+    });
+
+    var builder = try B.static(std.testing.allocator, &.{ "-l", "3.5" });
+    defer builder.deinit();
+
+    const args = try builder.try_parse();
+
+    try std.testing.expectApproxEqRel(args.level, 3.5, 0.0003);
 }
