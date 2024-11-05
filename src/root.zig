@@ -4,6 +4,7 @@ const Options = @import("./opts.zig").Options;
 
 const FlagError = error{
     NoExistingFlag,
+    MissingRequired,
 };
 
 fn CreateFlags(T: type, opts: Options(T)) type {
@@ -179,20 +180,34 @@ pub fn Builder(T: type, opts: Options(T)) type {
             var args: T = undefined;
 
             const scratch = self.scratch.allocator();
-            inline for (s.fields) |field| {
+            var required: u64 = 0;
+            inline for (s.fields, 0..) |field, i| {
+                comptime var req = true;
+
                 if (comptime @field(opts, field.name).default) |def| {
                     @field(args, field.name) = def;
+                    req = false;
                 }
 
                 if (comptime @field(opts, field.name).env) |evar| {
                     @field(args, field.name) = try std.process.getEnvVarOwned(scratch, evar);
+                    req = false;
                 }
 
                 switch (@typeInfo(field.type)) {
                     .Optional => {
                         @field(args, field.name) = null;
+                        req = false;
+                    },
+                    .Bool => {
+                        @field(args, field.name) = false;
+                        req = false;
                     },
                     else => {},
+                }
+
+                if (req) {
+                    required |= 1 << i;
                 }
             }
 
@@ -205,6 +220,7 @@ pub fn Builder(T: type, opts: Options(T)) type {
                 if (!skip_processing) {
                     if (current_flag) |flag| {
                         try flag.setup(&args, arg);
+                        required &= ~std.math.shl(u64, 1, flag.back);
                         current_flag = null;
                     } else {
                         const flag = try Flag.from(arg);
@@ -216,6 +232,10 @@ pub fn Builder(T: type, opts: Options(T)) type {
                         }
                     }
                 }
+            }
+
+            if (required != 0) {
+                return FlagError.MissingRequired;
             }
 
             return args;
@@ -415,4 +435,22 @@ test "optional option parsed" {
 
         try std.testing.expectEqual(42, args.level);
     }
+}
+
+test "required option fails" {
+    const Args = struct {
+        level: u32,
+    };
+
+    const B = Builder(Args, .{
+        .level = .{
+            .short = 'l',
+            .long = "level",
+        },
+    });
+
+    var builder = try B.static(std.testing.allocator, &.{});
+    defer builder.deinit();
+
+    try std.testing.expectError(FlagError.MissingRequired, builder.try_parse());
 }
