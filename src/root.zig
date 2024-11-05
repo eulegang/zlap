@@ -16,6 +16,7 @@ fn CreateFlags(T: type, opts: Options(T)) type {
     return struct {
         const Self = @This();
 
+        is_optional: bool,
         is_flag: bool,
         back: u64,
 
@@ -27,20 +28,32 @@ fn CreateFlags(T: type, opts: Options(T)) type {
             if (arg[0] == '-' and arg[1] == '-') {
                 inline for (s.fields, 0..) |field, i| {
                     const name = @field(opts, field.name).long;
+                    const is_optional = switch (@typeInfo(field.type)) {
+                        .Optional => true,
+                        else => false,
+                    };
+
                     if (std.mem.eql(u8, name, arg[2..])) {
                         return Self{
                             .back = i,
                             .is_flag = field.type == bool,
+                            .is_optional = is_optional,
                         };
                     }
                 }
             } else if (arg.len == 2) {
                 inline for (s.fields, 0..) |field, i| {
                     const short = @field(opts, field.name).short;
+                    const is_optional = switch (@typeInfo(field.type)) {
+                        .Optional => true,
+                        else => false,
+                    };
+
                     if (short == arg[1]) {
                         return Self{
                             .back = i,
                             .is_flag = field.type == bool,
+                            .is_optional = is_optional,
                         };
                     }
                 }
@@ -83,6 +96,32 @@ fn CreateFlags(T: type, opts: Options(T)) type {
                     if (ptr.size == .Slice and ptr.child == u8) { // string!
                         @field(args, field.name) = arg;
                     } else {}
+                },
+
+                .Optional => |opt| {
+                    switch (@typeInfo(opt.child)) {
+                        .Bool => {
+                            unreachable; // handled by other code path
+                        },
+
+                        .Int => {
+                            @field(args, field.name) = try std.fmt.parseInt(opt.child, arg, 10);
+                        },
+
+                        .Float => {
+                            @field(args, field.name) = try std.fmt.parseFloat(opt.child, arg);
+                        },
+
+                        .Pointer => |ptr| {
+                            if (ptr.size == .Slice and ptr.child == u8) { // string!
+                                @field(args, field.name) = arg;
+                            } else {}
+                        },
+
+                        else => {
+                            @compileLog("Parsing zlap does not support arguements with type", @typeInfo(field.type));
+                        },
+                    }
                 },
 
                 else => {
@@ -147,6 +186,13 @@ pub fn Builder(T: type, opts: Options(T)) type {
 
                 if (comptime @field(opts, field.name).env) |evar| {
                     @field(args, field.name) = try std.process.getEnvVarOwned(scratch, evar);
+                }
+
+                switch (@typeInfo(field.type)) {
+                    .Optional => {
+                        @field(args, field.name) = null;
+                    },
+                    else => {},
                 }
             }
 
@@ -337,5 +383,36 @@ test "boolean option parsed" {
         const args = try builder.try_parse();
 
         try std.testing.expect(!args.verbose);
+    }
+}
+
+test "optional option parsed" {
+    const Args = struct {
+        level: ?u32,
+    };
+
+    const B = Builder(Args, .{
+        .level = .{
+            .short = 'l',
+            .long = "level",
+        },
+    });
+
+    {
+        var builder = try B.static(std.testing.allocator, &.{});
+        defer builder.deinit();
+
+        const args = try builder.try_parse();
+
+        try std.testing.expectEqual(null, args.level);
+    }
+
+    {
+        var builder = try B.static(std.testing.allocator, &.{ "-l", "42" });
+        defer builder.deinit();
+
+        const args = try builder.try_parse();
+
+        try std.testing.expectEqual(42, args.level);
     }
 }
