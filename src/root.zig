@@ -16,6 +16,7 @@ fn CreateFlags(T: type, opts: Options(T)) type {
     return struct {
         const Self = @This();
 
+        is_flag: bool,
         back: u64,
 
         fn from(arg: []const u8) FlagError!Self {
@@ -27,14 +28,20 @@ fn CreateFlags(T: type, opts: Options(T)) type {
                 inline for (s.fields, 0..) |field, i| {
                     const name = @field(opts, field.name).long;
                     if (std.mem.eql(u8, name, arg[2..])) {
-                        return Self{ .back = i };
+                        return Self{
+                            .back = i,
+                            .is_flag = field.type == bool,
+                        };
                     }
                 }
             } else if (arg.len == 2) {
                 inline for (s.fields, 0..) |field, i| {
                     const short = @field(opts, field.name).short;
                     if (short == arg[1]) {
-                        return Self{ .back = i };
+                        return Self{
+                            .back = i,
+                            .is_flag = field.type == bool,
+                        };
                     }
                 }
             }
@@ -50,8 +57,20 @@ fn CreateFlags(T: type, opts: Options(T)) type {
             }
         }
 
+        fn set_flag(self: Self, args: *T) !void {
+            inline for (s.fields, 0..) |field, i| {
+                if (i == self.back and field.type == bool) {
+                    @field(args, field.name) = true;
+                }
+            }
+        }
+
         fn set(_: Self, args: *T, field: std.builtin.Type.StructField, arg: []const u8) !void {
             switch (@typeInfo(field.type)) {
+                .Bool => {
+                    unreachable; // handled by other code path
+                },
+
                 .Int => {
                     @field(args, field.name) = try std.fmt.parseInt(field.type, arg, 10);
                 },
@@ -142,7 +161,13 @@ pub fn Builder(T: type, opts: Options(T)) type {
                         try flag.setup(&args, arg);
                         current_flag = null;
                     } else {
-                        current_flag = try Flag.from(arg);
+                        const flag = try Flag.from(arg);
+
+                        if (flag.is_flag) {
+                            try flag.set_flag(&args);
+                        } else {
+                            current_flag = flag;
+                        }
                     }
                 }
             }
@@ -283,4 +308,34 @@ test "float option parsed" {
     const args = try builder.try_parse();
 
     try std.testing.expectApproxEqRel(args.level, 3.5, 0.0003);
+}
+
+test "boolean option parsed" {
+    const Args = struct {
+        verbose: bool,
+    };
+
+    const B = Builder(Args, .{
+        .verbose = .{
+            .short = 'v',
+            .long = "verbose",
+        },
+    });
+
+    {
+        var builder = try B.static(std.testing.allocator, &.{"-v"});
+        defer builder.deinit();
+
+        const args = try builder.try_parse();
+
+        try std.testing.expect(args.verbose);
+    }
+    {
+        var builder = try B.static(std.testing.allocator, &.{});
+        defer builder.deinit();
+
+        const args = try builder.try_parse();
+
+        try std.testing.expect(!args.verbose);
+    }
 }
