@@ -80,57 +80,41 @@ fn CreateFlags(T: type, opts: Options(T)) type {
         }
 
         fn set(_: Self, args: *T, field: std.builtin.Type.StructField, arg: []const u8) !void {
-            switch (@typeInfo(field.type)) {
-                .Bool => {
-                    unreachable; // handled by other code path
-                },
-
-                .Int => {
-                    @field(args, field.name) = try std.fmt.parseInt(field.type, arg, 10);
-                },
-
-                .Float => {
-                    @field(args, field.name) = try std.fmt.parseFloat(field.type, arg);
-                },
-
-                .Pointer => |ptr| {
-                    if (ptr.size == .Slice and ptr.child == u8) { // string!
-                        @field(args, field.name) = arg;
-                    } else {}
-                },
-
-                .Optional => |opt| {
-                    switch (@typeInfo(opt.child)) {
-                        .Bool => {
-                            unreachable; // handled by other code path
-                        },
-
-                        .Int => {
-                            @field(args, field.name) = try std.fmt.parseInt(opt.child, arg, 10);
-                        },
-
-                        .Float => {
-                            @field(args, field.name) = try std.fmt.parseFloat(opt.child, arg);
-                        },
-
-                        .Pointer => |ptr| {
-                            if (ptr.size == .Slice and ptr.child == u8) { // string!
-                                @field(args, field.name) = arg;
-                            } else {}
-                        },
-
-                        else => {
-                            @compileLog("Parsing zlap does not support arguements with type", @typeInfo(field.type));
-                        },
-                    }
-                },
-
-                else => {
-                    @compileLog("Parsing zlap does not support arguements with type", @typeInfo(field.type));
-                },
-            }
+            @field(args, field.name) = try parseArg(field.type, arg);
         }
     };
+}
+
+fn parseArg(T: type, arg: []const u8) !T {
+    switch (@typeInfo(T)) {
+        .Bool => {
+            unreachable; // handled by other code path
+        },
+
+        .Int => {
+            return try std.fmt.parseInt(T, arg, 10);
+        },
+
+        .Float => {
+            return try std.fmt.parseFloat(T, arg);
+        },
+
+        .Optional => |opt| {
+            return try parseArg(opt.child, arg);
+        },
+
+        .Pointer => |ptr| {
+            if (ptr.size == .Slice and ptr.child == u8) { // string!
+                return arg;
+            } else {
+                @compileLog("Parsing zlap does not support arguements with type", @typeInfo(T));
+            }
+        },
+
+        else => {
+            @compileLog("Parsing zlap does not support arguements with type", @typeInfo(T));
+        },
+    }
 }
 
 pub fn Builder(T: type, opts: Options(T)) type {
