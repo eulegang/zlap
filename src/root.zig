@@ -2,7 +2,7 @@ const std = @import("std");
 const ArgIter = @import("./args.zig").ArgIter;
 const Options = @import("./opts.zig").Options;
 
-pub const FlagError = error{
+pub const FlagError = std.fmt.ParseIntError || std.fmt.ParseFloatError || std.process.GetEnvVarOwnedError || error{
     NoExistingFlag,
     MissingRequired,
     InvalidEnum,
@@ -65,7 +65,7 @@ fn CreateFlags(T: type, opts: Options(T)) type {
             return FlagError.NoExistingFlag;
         }
 
-        fn setup(self: Self, args: *T, arg: []const u8) !void {
+        fn setup(self: Self, args: *T, arg: []const u8) FlagError!void {
             inline for (s.fields, 0..) |field, i| {
                 if (i == self.back) {
                     @field(args, field.name) = try parseArg(field.type, arg);
@@ -73,7 +73,7 @@ fn CreateFlags(T: type, opts: Options(T)) type {
             }
         }
 
-        fn set_flag(self: Self, args: *T) !void {
+        fn set_flag(self: Self, args: *T) FlagError!void {
             inline for (s.fields, 0..) |field, i| {
                 if (i == self.back and field.type == bool) {
                     @field(args, field.name) = true;
@@ -83,7 +83,7 @@ fn CreateFlags(T: type, opts: Options(T)) type {
     };
 }
 
-fn parseArg(T: type, arg: []const u8) !T {
+fn parseArg(T: type, arg: []const u8) FlagError!T {
     switch (@typeInfo(T)) {
         .Bool => {
             unreachable; // handled by other code path
@@ -178,7 +178,7 @@ pub fn Builder(T: type, opts: Options(T)) type {
             self.iter.deinit(self.alloc);
         }
 
-        pub fn try_parse(self: *@This()) !T {
+        pub fn try_parse(self: *@This()) FlagError!T {
             var skip_processing = false;
             var current_flag: ?Flag = null;
             var args: T = undefined;
