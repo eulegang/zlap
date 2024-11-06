@@ -5,6 +5,8 @@ const Options = @import("./opts.zig").Options;
 const FlagError = error{
     NoExistingFlag,
     MissingRequired,
+    InvalidEnum,
+    InvalidParse,
 };
 
 fn CreateFlags(T: type, opts: Options(T)) type {
@@ -66,7 +68,7 @@ fn CreateFlags(T: type, opts: Options(T)) type {
         fn setup(self: Self, args: *T, arg: []const u8) !void {
             inline for (s.fields, 0..) |field, i| {
                 if (i == self.back) {
-                    try self.set(args, field, arg);
+                    @field(args, field.name) = try parseArg(field.type, arg);
                 }
             }
         }
@@ -77,10 +79,6 @@ fn CreateFlags(T: type, opts: Options(T)) type {
                     @field(args, field.name) = true;
                 }
             }
-        }
-
-        fn set(_: Self, args: *T, field: std.builtin.Type.StructField, arg: []const u8) !void {
-            @field(args, field.name) = try parseArg(field.type, arg);
         }
     };
 }
@@ -101,6 +99,28 @@ fn parseArg(T: type, arg: []const u8) !T {
 
         .Optional => |opt| {
             return try parseArg(opt.child, arg);
+        },
+
+        .Enum => |enumeration| {
+            if (@hasDecl(T, "parse_opt")) {
+                return try T.parse_opt(arg);
+            } else {
+                inline for (enumeration.fields) |field| {
+                    if (std.ascii.eqlIgnoreCase(arg, field.name)) {
+                        return @enumFromInt(field.value);
+                    }
+                }
+
+                return FlagError.InvalidEnum;
+            }
+        },
+
+        .Struct, .Union => {
+            if (@hasDecl(T, "parse_opt")) {
+                return try T.parse_opt(arg);
+            } else {
+                @compileLog("Parsing zlap does not support arguements with type", @typeInfo(T));
+            }
         },
 
         .Pointer => |ptr| {
@@ -174,7 +194,9 @@ pub fn Builder(T: type, opts: Options(T)) type {
                 }
 
                 if (comptime @field(opts, field.name).env) |evar| {
-                    @field(args, field.name) = try std.process.getEnvVarOwned(scratch, evar);
+                    const env = try std.process.getEnvVarOwned(scratch, evar);
+                    @field(args, field.name) = try parseArg(field.type, env);
+
                     req = false;
                 }
 
@@ -437,4 +459,54 @@ test "required option fails" {
     defer builder.deinit();
 
     try std.testing.expectError(FlagError.MissingRequired, builder.try_parse());
+}
+
+test "enum option" {
+    const Status = enum {
+        On,
+        Off,
+    };
+
+    const Args = struct {
+        status: Status,
+    };
+
+    const B = Builder(Args, .{
+        .status = .{
+            .short = 's',
+            .long = "status",
+        },
+    });
+
+    var builder = try B.static(std.testing.allocator, &.{ "-s", "on" });
+    defer builder.deinit();
+
+    const args = try builder.try_parse();
+
+    try std.testing.expectEqual(.On, args.status);
+}
+
+test "custom parse option" {
+    const Duration = struct {
+        secs: u32,
+
+        fn parse_opt(_: []const u8) !@This() {
+            return @This(){
+                .secs = 30,
+            };
+        }
+    };
+
+    const Args = struct {
+        duration: Duration,
+    };
+
+    const B = Builder(Args, .{ .duration = .{} });
+
+    var builder = try B.static(std.testing.allocator, &.{ "-d", "30m" });
+    defer builder.deinit();
+
+    const args = try builder.try_parse();
+
+    try std.testing.expectEqual(Duration{ .secs = 30 }, args.duration);
 }
