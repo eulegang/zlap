@@ -4,17 +4,19 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    _ = b.addModule("zlap", .{
+    const mod = b.addModule("zlap", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
 
     const lib_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/root.zig"),
+        .root_source_file = b.path("src/test.zig"),
         .target = target,
         .optimize = optimize,
     });
+
+    lib_unit_tests.root_module.addImport("zlap", mod);
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
 
