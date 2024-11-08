@@ -1,6 +1,7 @@
 const std = @import("std");
 const ArgIter = @import("./args.zig").ArgIter;
 const Options = @import("./opts.zig").Options;
+pub const types = @import("./arg_types/mod.zig");
 
 pub const FlagError = std.fmt.ParseIntError || std.fmt.ParseFloatError || std.process.GetEnvVarOwnedError || error{
     NoExistingFlag,
@@ -121,7 +122,7 @@ fn parseArg(T: type, arg: []const u8) FlagError!T {
             if (@hasDecl(T, "parse_opt")) {
                 return try T.parse_opt(arg);
             } else {
-                @compileLog("Parsing zlap does not support arguements with type " ++ @typeName(T), @typeInfo(T));
+                @compileLog("Parsing zlap does not support arguements with type \"" ++ @typeName(T) ++ "\" needs to implement parse_opt");
             }
         },
 

@@ -336,3 +336,35 @@ test "help description" {
     const expected = "test-app - test app\n\t-i, --input\tgather input from stream\n\t-o, --output\tpush output to stream\n";
     try std.testing.expectEqualStrings(expected, help_text);
 }
+
+test "File arg" {
+    const Args = struct {
+        input: zlap.types.File,
+        output: zlap.types.File,
+    };
+
+    const B = zlap.Builder(Args, .{
+        .name = "test-app",
+        .description = "test app",
+        .options = .{
+            .input = .{
+                .short = 'i',
+                .long = "input",
+                .help = "gather input from stream",
+            },
+            .output = .{
+                .short = 'o',
+                .long = "output",
+                .help = "push output to stream",
+            },
+        },
+    });
+
+    var builder = try B.static(std.testing.allocator, &.{ "-o", "out.txt", "-i", "-" });
+    defer builder.deinit();
+
+    const args = try builder.try_parse();
+
+    try std.testing.expectEqual(zlap.types.File{ .std = @as(void, undefined) }, args.input);
+    try std.testing.expectEqualStrings("out.txt", args.output.file);
+}
