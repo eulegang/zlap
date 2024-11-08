@@ -48,13 +48,6 @@ fn Option(comptime name: []const u8) type {
                     .default_value = &NULL_OPT,
                     .alignment = 8,
                 },
-                .{
-                    .type = bool,
-                    .name = "rest",
-                    .default_value = &false,
-                    .is_comptime = false,
-                    .alignment = 8,
-                },
             },
         },
     });
