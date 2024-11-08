@@ -8,13 +8,17 @@ test "basic builder" {
     };
 
     const B = zlap.Builder(Args, .{
-        .input = .{
-            .short = 'i',
-            .long = "input",
-        },
-        .output = .{
-            .short = 'o',
-            .long = "output",
+        .name = "test-app",
+        .description = "test app",
+        .options = .{
+            .input = .{
+                .short = 'i',
+                .long = "input",
+            },
+            .output = .{
+                .short = 'o',
+                .long = "output",
+            },
         },
     });
 
@@ -33,10 +37,14 @@ test "default option in builder" {
     };
 
     const B = zlap.Builder(Args, .{
-        .config = .{
-            .short = 'c',
-            .long = "config",
-            .default = "/etc/some.conf",
+        .name = "test-app",
+        .description = "test app",
+        .options = .{
+            .config = .{
+                .short = 'c',
+                .long = "config",
+                .default = "/etc/some.conf",
+            },
         },
     });
 
@@ -65,10 +73,14 @@ test "env option in builder" {
     };
 
     const B = zlap.Builder(Args, .{
-        .user = .{
-            .short = 'u',
-            .long = "user",
-            .env = "USER",
+        .name = "test-app",
+        .description = "test app",
+        .options = .{
+            .user = .{
+                .short = 'u',
+                .long = "user",
+                .env = "USER",
+            },
         },
     });
 
@@ -100,9 +112,13 @@ test "int option parsed" {
     };
 
     const B = zlap.Builder(Args, .{
-        .level = .{
-            .short = 'l',
-            .long = "level",
+        .name = "test-app",
+        .description = "test app",
+        .options = .{
+            .level = .{
+                .short = 'l',
+                .long = "level",
+            },
         },
     });
 
@@ -120,9 +136,13 @@ test "float option parsed" {
     };
 
     const B = zlap.Builder(Args, .{
-        .level = .{
-            .short = 'l',
-            .long = "level",
+        .name = "test-app",
+        .description = "test app",
+        .options = .{
+            .level = .{
+                .short = 'l',
+                .long = "level",
+            },
         },
     });
 
@@ -140,9 +160,13 @@ test "boolean option parsed" {
     };
 
     const B = zlap.Builder(Args, .{
-        .verbose = .{
-            .short = 'v',
-            .long = "verbose",
+        .name = "test-app",
+        .description = "test app",
+        .options = .{
+            .verbose = .{
+                .short = 'v',
+                .long = "verbose",
+            },
         },
     });
 
@@ -170,9 +194,13 @@ test "optional option parsed" {
     };
 
     const B = zlap.Builder(Args, .{
-        .level = .{
-            .short = 'l',
-            .long = "level",
+        .name = "test-app",
+        .description = "test app",
+        .options = .{
+            .level = .{
+                .short = 'l',
+                .long = "level",
+            },
         },
     });
 
@@ -201,9 +229,13 @@ test "required option fails" {
     };
 
     const B = zlap.Builder(Args, .{
-        .level = .{
-            .short = 'l',
-            .long = "level",
+        .name = "test-app",
+        .description = "test app",
+        .options = .{
+            .level = .{
+                .short = 'l',
+                .long = "level",
+            },
         },
     });
 
@@ -224,9 +256,13 @@ test "enum option" {
     };
 
     const B = zlap.Builder(Args, .{
-        .status = .{
-            .short = 's',
-            .long = "status",
+        .name = "test-app",
+        .description = "test app",
+        .options = .{
+            .status = .{
+                .short = 's',
+                .long = "status",
+            },
         },
     });
 
@@ -253,7 +289,11 @@ test "custom parse option" {
         duration: Duration,
     };
 
-    const B = zlap.Builder(Args, .{ .duration = .{} });
+    const B = zlap.Builder(Args, .{
+        .name = "test-app",
+        .description = "test app",
+        .options = .{ .duration = .{} },
+    });
 
     var builder = try B.static(std.testing.allocator, &.{ "-d", "30m" });
     defer builder.deinit();
@@ -261,4 +301,36 @@ test "custom parse option" {
     const args = try builder.try_parse();
 
     try std.testing.expectEqual(Duration{ .secs = 30 }, args.duration);
+}
+
+test "help description" {
+    const Args = struct {
+        input: []const u8,
+        output: []const u8,
+    };
+
+    const B = zlap.Builder(Args, .{
+        .name = "test-app",
+        .description = "test app",
+        .options = .{
+            .input = .{
+                .short = 'i',
+                .long = "input",
+                .help = "gather input from stream",
+            },
+            .output = .{
+                .short = 'o',
+                .long = "output",
+                .help = "push output to stream",
+            },
+        },
+    });
+
+    var builder = try B.static(std.testing.allocator, &.{ "-o", "out.txt", "-i", "input.txt" });
+    defer builder.deinit();
+
+    const help_text = builder.help();
+
+    const expected = "test-app - test app\n\t-i, --input\tgather input from stream\n\t-o, --output\tpush output to stream\n";
+    try std.testing.expectEqualStrings(expected, help_text);
 }

@@ -42,6 +42,13 @@ fn Option(comptime name: []const u8) type {
                     .alignment = 8,
                 },
                 .{
+                    .type = ?[]const u8,
+                    .name = "help",
+                    .is_comptime = false,
+                    .default_value = &NULL_OPT,
+                    .alignment = 8,
+                },
+                .{
                     .type = bool,
                     .name = "rest",
                     .default_value = &false,

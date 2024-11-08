@@ -137,7 +137,15 @@ fn parseArg(T: type, arg: []const u8) FlagError!T {
     }
 }
 
-pub fn Builder(T: type, opts: Options(T)) type {
+fn AppDesc(T: type) type {
+    return struct {
+        name: []const u8,
+        description: []const u8,
+        options: Options(T),
+    };
+}
+
+pub fn Builder(T: type, desc: AppDesc(T)) type {
     const s = switch (@typeInfo(T)) {
         .Struct => |s| s,
         else => @compileError("Flags may only be made out of structs"),
@@ -145,7 +153,7 @@ pub fn Builder(T: type, opts: Options(T)) type {
 
     return struct {
         const Self = @This();
-        const Flag = CreateFlags(T, opts);
+        const Flag = CreateFlags(T, desc.options);
 
         alloc: std.mem.Allocator,
         iter: ArgIter,
@@ -188,12 +196,12 @@ pub fn Builder(T: type, opts: Options(T)) type {
             inline for (s.fields, 0..) |field, i| {
                 comptime var req = true;
 
-                if (comptime @field(opts, field.name).default) |def| {
+                if (comptime @field(desc.options, field.name).default) |def| {
                     @field(args, field.name) = def;
                     req = false;
                 }
 
-                if (comptime @field(opts, field.name).env) |evar| {
+                if (comptime @field(desc.options, field.name).env) |evar| {
                     const env = try std.process.getEnvVarOwned(scratch, evar);
                     @field(args, field.name) = try parseArg(field.type, env);
 
@@ -245,6 +253,28 @@ pub fn Builder(T: type, opts: Options(T)) type {
             }
 
             return args;
+        }
+
+        pub fn help(_: *@This()) []const u8 {
+            comptime var help_desc: []const u8 = desc.name ++ " - " ++ desc.description ++ "\n";
+
+            inline for (@typeInfo(@TypeOf(desc.options)).Struct.fields) |field| {
+                comptime var line: []const u8 = "\t";
+                const opt = @field(desc.options, field.name);
+
+                line = line ++ std.fmt.comptimePrint("-{c}", .{opt.short});
+                line = line ++ ", ";
+                line = line ++ std.fmt.comptimePrint("--{s}", .{opt.long});
+                line = line ++ "\t";
+
+                if (@field(desc.options, field.name).help) |help_text| {
+                    line = line ++ help_text;
+                }
+
+                help_desc = help_desc ++ line ++ "\n";
+            }
+
+            return help_desc;
         }
     };
 }
