@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const NULL_OPT: ?[]const u8 = null;
+const NULL_SHORT: ?u8 = null;
 
 fn Option(comptime name: []const u8) type {
     if (name.len == 0) {
@@ -14,16 +15,16 @@ fn Option(comptime name: []const u8) type {
             .decls = &[_]std.builtin.Type.Declaration{},
             .fields = &[_]std.builtin.Type.StructField{
                 .{
-                    .type = u8,
+                    .type = ?u8,
                     .name = "short",
-                    .default_value = &name[0],
+                    .default_value = &NULL_SHORT,
                     .is_comptime = false,
                     .alignment = 8,
                 },
                 .{
-                    .type = []const u8,
+                    .type = ?[]const u8,
                     .name = "long",
-                    .default_value = @ptrCast(&name),
+                    .default_value = &NULL_OPT,
                     .is_comptime = false,
                     .alignment = 8,
                 },

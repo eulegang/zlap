@@ -36,12 +36,14 @@ fn CreateFlags(T: type, opts: Options(T)) type {
                         else => false,
                     };
 
-                    if (std.mem.eql(u8, name, arg[2..])) {
-                        return Self{
-                            .back = i,
-                            .is_flag = field.type == bool,
-                            .is_optional = is_optional,
-                        };
+                    if (name) |n| {
+                        if (std.mem.eql(u8, n, arg[2..])) {
+                            return Self{
+                                .back = i,
+                                .is_flag = field.type == bool,
+                                .is_optional = is_optional,
+                            };
+                        }
                     }
                 }
             } else if (arg.len == 2) {
@@ -262,9 +264,17 @@ pub fn Builder(T: type, desc: AppDesc(T)) type {
                 comptime var line: []const u8 = "\t";
                 const opt = @field(desc.options, field.name);
 
-                line = line ++ std.fmt.comptimePrint("-{c}", .{opt.short});
-                line = line ++ ", ";
-                line = line ++ std.fmt.comptimePrint("--{s}", .{opt.long});
+                if (opt.short) |short| {
+                    line = line ++ std.fmt.comptimePrint("-{c}", .{short});
+                }
+
+                if (opt.long) |long| {
+                    if (opt.short != null) {
+                        line = line ++ ", ";
+                    }
+                    line = line ++ std.fmt.comptimePrint("--{s}", .{long});
+                }
+
                 line = line ++ "\t";
 
                 if (@field(desc.options, field.name).help) |help_text| {

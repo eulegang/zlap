@@ -292,7 +292,9 @@ test "custom parse option" {
     const B = zlap.Builder(Args, .{
         .name = "test-app",
         .description = "test app",
-        .options = .{ .duration = .{} },
+        .options = .{
+            .duration = .{ .short = 'd' },
+        },
     });
 
     var builder = try B.static(std.testing.allocator, &.{ "-d", "30m" });
